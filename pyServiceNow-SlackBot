@@ -1,0 +1,507 @@
+# -*- coding: utf-8 -*-
+
+# TEST SLACK API
+# written by: Erick Capote
+# Product Development R&D
+
+
+import configparser
+import logging
+import slack
+import json
+import re             # regex library
+import requests
+
+
+# Define INI file
+settings = configparser.ConfigParser()
+settings.read('/app/slack_bot_config.ini')
+
+
+# SETUP THE FUNCTION FOR TO READ THE CONFIG FILE HEADERS
+def ConfigSectionMap(section):
+    dict1 = {}
+    options = settings.options(section)
+    for option in options:
+        try:
+            dict1[option] = settings.get(section, option)
+            if dict1[option] == -1:
+                print("skip: %s" % option)
+        except:
+            print("exception on %s!" % option)
+            dict1[option] = None
+    return dict1
+
+
+def setup_custom_logger(name):
+    LOG_FILENAME = '/app/rd_itsm_slack_bot.log'
+    formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+    handler = logging.FileHandler(LOG_FILENAME, mode='a')
+    handler.setFormatter(formatter)
+    handler.setFormatter(formatter)
+    return logger
+
+
+# POST Slack message wtih ITSM Info
+def make_slack_api_call(payload, msg, thread, my_channel, payload_attachment):
+    print('MAKING SLACK POST CALL')
+    webclient = payload['web_client']
+    api_call = webclient.chat_postMessage(channel=my_channel, text=msg,
+                                          as_user=False, thread_ts=thread,
+                                          icon_emoji=':rotating_light:',
+                                          attachments=json.dumps(payload_attachment))
+    return api_call
+
+
+def get_today_itsm_incidents(ticket_no, username, password):
+    response_dict = {}
+    try:
+        print('GetITSM-get_today_itsm_incidents number: ', ticket_no)
+        url = 'https://dimensiondataservices.service-now.com/api/now/table/incident?sysparm_display_value=true&number={0}'.format(ticket_no)
+        logger.info('API URL: %s' % url)
+        headers = {'Content-Type': 'application/json'}
+        api_request = requests.get(url, auth=(username, password), headers=headers, verify=False)
+        logger.info('get_today_itsm_incidents_status_code: %s' % api_request.status_code)
+        response_code = api_request.status_code
+        api_response = api_request.json()
+        return api_response
+    except Exception as e:
+        response_dict[response_code] = 'ERROR %r' % e
+        logger.info('get_today_itsm_incidents ERROR: {}'.format(response_dict))
+        return response_dict
+
+
+def get_today_itsm_svr(ticket_no, username, password):
+    response_dict = {}
+    try:
+        url = 'https://dimensiondataservices.service-now.com/api/now/table/u_request?sysparm_display_value=true&number={0}'.format(ticket_no)
+        logger.info('SVR_API URL: %s' % url)
+        print(url)
+        headers = {'Content-Type': 'application/json'}
+        api_request = requests.get(url, auth=(username, password), headers=headers, verify=False)
+        logger.info('get_today_itsm_svr_api_response_code: %r' % api_request.status_code)
+        response_code = api_request.status_code
+        api_response = api_request.json()
+        return api_response
+    except Exception as e:
+        response_dict[response_code] = 'ERROR %r' % e
+        logger.info('get_today_itsm_incidents ERROR: {}'.format(response_dict))
+        return response_dict
+
+
+def get_today_itsm_evt(ticket_no, username, password):
+    response_dict = {}
+    try:
+        url = 'https://dimensiondataservices.service-now.com/api/now/table/u_rim_event?sysparm_display_value=true&number={0}'.format(ticket_no)
+        logger.info('EVT_API URL: %s' % url)
+        headers = {'Content-Type': 'application/json'}
+        api_request = requests.get(url, auth=(username, password), headers=headers, verify=False)
+        response_code = api_request.status_code
+        api_response = api_request.json()
+        logger.info('EVT_response_code: %r' % api_request.status_code)
+        return api_response
+    except Exception as e:
+        response_dict[response_code] = 'ERROR %r' % e
+        logger.info('get_today_itsm_incidents ERROR: {}'.format(response_dict))
+        return response_dict
+
+
+def get_today_itsm_ctask(ticket_no, username, password):
+    response_dict = {}
+    try:
+        url = 'https://dimensiondataservices.service-now.com/api/now/table/change_task?sysparm_display_value=true&number={0}'.format(ticket_no)
+        logger.info('API URL: %s' % url)
+        headers = {'Content-Type': 'application/json'}
+        api_request = requests.get(url, auth=(username, password), headers=headers, verify=False)
+        response_code = api_request.status_code
+        api_response = api_request.json()
+        logger.info('CTASK_response_code: %r' % api_request.status_code)
+        return api_response
+    except Exception as e:
+        response_dict[response_code] = 'ERROR %r' % e
+        logger.info('get_today_itsm_incidents ERROR: {}'.format(response_dict))
+        return response_dict
+
+
+
+def get_today_itsm_chm(ticket_no, username, password):
+    response_dict = {}
+    try:
+        url = 'https://dimensiondataservices.service-now.com/api/now/table/change_request?sysparm_display_value=true&number={0}'.format(ticket_no)
+        logger.info('CHM API URL: %s' % url)
+        headers = {'Content-Type': 'application/json'}
+        api_request = requests.get(url, auth=(username, password), headers=headers, verify=False)
+        response_code = api_request.status_code
+        api_response = api_request.json()
+        logger.info('CHM_response_code: %r' % api_request.status_code)
+        return api_response
+    except Exception as e:
+        response_dict[response_code] = 'ERROR %r' % e
+        logger.info('get_today_itsm_incidents ERROR: {}'.format(response_dict))
+        return response_dict
+
+
+def get_today_itsm_stask(ticket_no, username, password):
+    response_dict = {}
+    try:
+        url = 'https://dimensiondataservices.service-now.com/api/now/table/u_request_task?sysparm_display_value=true&number={0}'.format(ticket_no)
+        logger.info('STASK API URL: %s' % url)
+        headers = {'Content-Type': 'application/json'}
+        api_request = requests.get(url, auth=(username, password), headers=headers, verify=False)
+        response_code = api_request.status_code
+        api_response = api_request.json()
+        logger.info('STASK_response_code: %r' % api_request.status_code)
+        return api_response
+    except Exception as e:
+        response_dict[response_code] = 'ERROR %r' % e
+        logger.info('get_today_itsm_incidents ERROR: {}'.format(response_dict))
+        return response_dict
+
+
+def process_itsm_info(itsm_tickets):
+    data = itsm_tickets
+    logger.info('itsm_tickets_data: %r' % data)
+    itsm_dict = {}
+    for incident in data.items():
+        for no_of_incidents in range(len(incident[1])):
+            itsm_dict_info = {}
+            itsm_incident_no = incident[1][no_of_incidents]['number']
+            itsm_dict_info['opened_at'] = incident[1][no_of_incidents]['opened_at']
+            itsm_dict_info['assignment_group'] = incident[1][no_of_incidents]['assignment_group']['display_value']
+            itsm_dict_info['state'] = incident[1][no_of_incidents]['state']
+            itsm_dict_info['sys_updated_on'] = incident[1][no_of_incidents]['sys_updated_on']
+            itsm_dict_info['severity'] = incident[1][no_of_incidents]['severity']
+            itsm_dict_info['short_description'] = incident[1][no_of_incidents]['short_description']
+            work_notes = incident[1][no_of_incidents]['work_notes']
+            # itsm_dict_info['comments'] = (incident[1][no_of_incidents]['comments'])[:500]
+            itsm_dict_info['comments'] = work_notes[:1000]
+            if incident[1][no_of_incidents]['opened_by']:
+                itsm_dict_info['opened_by'] = incident[1][no_of_incidents]['opened_by']['display_value']
+            else:
+                itsm_dict_info['opened_by'] = 'Nobody'
+            itsm_dict[itsm_incident_no] = itsm_dict_info
+    logger.info('itsm_dict_RETURNED_PROCESS: %r' % itsm_dict)
+    return itsm_dict
+
+
+def process_itsm_svr_info(itsm_tickets):
+    data = itsm_tickets
+    logger.info('process_itsm_svr_info_DATA: %r' % data)
+    itsm_dict = {}
+    for incident in data.items():
+        for no_of_incidents in range(len(incident[1])):
+            itsm_dict_info = {}
+            itsm_incident_no = incident[1][no_of_incidents]['number']
+            itsm_dict_info['opened_at'] = incident[1][no_of_incidents]['opened_at']
+            itsm_dict_info['assignment_group'] = incident[1][no_of_incidents]['assignment_group']['display_value']
+            itsm_dict_info['state'] = incident[1][no_of_incidents]['state']
+            itsm_dict_info['sys_updated_on'] = incident[1][no_of_incidents]['sys_updated_on']
+            itsm_dict_info['impact'] = incident[1][no_of_incidents]['impact']
+            itsm_dict_info['short_description'] = incident[1][no_of_incidents]['short_description']
+            itsm_dict_info['comments'] = (incident[1][no_of_incidents]['comments'])[:1000]
+            itsm_dict_info['opened_by'] = incident[1][no_of_incidents]['opened_by']['display_value']
+            itsm_dict[itsm_incident_no] = itsm_dict_info
+    logger.info('process_itsm_svr_info_itsm_dict: %r' % itsm_dict)
+    return itsm_dict
+
+
+@slack.RTMClient.run_on(event="message")
+def slack_connect(**payload):
+    # GET ONLY THE ICM AND SVR ITSM TICKETS
+    case_no_pattern = r'^(get-itsm)[ ](ICM|SVR|EVT|CTASK|CHM|STASK)([0-9]+)$'
+    # GET username and pwd from config for ServiceNOW login
+    usr = ConfigSectionMap('itsm_creds')['username'].strip()
+    pwd = ConfigSectionMap('itsm_creds')['password'].strip()
+    print('STARTING')
+    try:
+        data_stream = payload['data']
+        print('SLACK_DATA_STREAM: ', data_stream)
+        # CHECK THAT THE CONNECTION EXISTS -->MAYBE REMOVE??5-8-2017
+        if data_stream:
+            if 'text' in data_stream.keys():
+                print('TEXT: ', data_stream['text'])
+                # CHECK TXT TYPED IN SLACK CHANNEL AGAINST REGEX PATTERN
+                match = re.findall(case_no_pattern, data_stream['text'])
+                logger.info('MATCH %r' % match)
+                # IF WE GET A MATCH!!!
+                if match:
+                    print('DATA_STR_WITH_MATCH %r' % data_stream)
+                    logger.info('DATA_STRM_WITH_MATCH %r' % data_stream)
+                    logger.info('MATCH_MSG_KEYS %r' % data_stream.keys())
+                    logger.info('MATCH_TEXT %r' % data_stream['text'])
+                    logger.info('MATCH_USER %r' % data_stream['user'])
+                    ticket_no = str(match[0][1] + match[0][2])
+                    logger.info('TICKET_NO_MATCH %r' % ticket_no)
+                    print('TICKET_NO_MATCH %r' % ticket_no)
+                    if 'ICM' in ticket_no:
+                        thread = data_stream['ts']
+                        logger.info('***** START PROCESSING OF DICT for ICM_THREAD %r' % thread)
+                        my_channel = data_stream['channel']
+                        itsm_dict = get_today_itsm_incidents(ticket_no, usr, pwd)
+                        logger.info('ITSM_DICT %r' % itsm_dict)
+                        print('ITSM_DICT %r' % itsm_dict)
+                        if 'result' in itsm_dict.keys():
+                            itsm_info = process_itsm_info(itsm_dict)
+                            logger.info('itsm_info %r' % itsm_info)
+                            main_txt = ''
+                            msg = '''
+                                Date Opened: {0}\nopened_by: {1}\nSeverity: {2}
+                                '''.format(itsm_info[ticket_no]['opened_at'], itsm_info[ticket_no]['opened_by'],
+                                           itsm_info[ticket_no]['severity'])
+
+                            payload_raw = [{"fallback": ticket_no + itsm_info[ticket_no]['short_description'],
+                                            "pretext": ticket_no, \
+                                            "title": itsm_info[ticket_no]['short_description'], "text": msg,
+                                            "color": "#00e600", "fields": [
+                                    {"title": "Assigned To", "value": itsm_info[ticket_no]['assignment_group'],
+                                     "short": True}, \
+                                    {"title": "Date Updated", "value": itsm_info[ticket_no]['sys_updated_on'],
+                                     "short": True}, \
+                                    {"title": "Comments", "value": itsm_info[ticket_no]['comments'],
+                                     "short": False}], \
+                                            "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(payload, main_txt, thread, my_channel, payload_raw)
+                            logger.info('slack_api_response %r' % slack_response)
+                            print('slack_api_response %r' % slack_response)
+                        else:
+                            main_txt = ''
+                            msg = '''Could not find ticket Number %s''' % ticket_no
+                            payload_raw = [{"fallback": "No ticket found",
+                                            "pretext": ticket_no, \
+                                            "title": 'no ticket found', "text": msg,
+                                            "color": "#C62828", "fields": [
+                                    {"title": "Comments", "value": 'Got nothing back for ' + ticket_no,
+                                     "short": False}], "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(payload, main_txt, thread, my_channel, payload_raw)
+                            logger.info('send_slack_msg_REPLY %r' % slack_response)
+                    elif 'SVR' in ticket_no:
+                        logger.info('svr_ticket_no %r' % ticket_no)
+                        print('svr_ticket_no %r' % ticket_no)
+                        thread = data_stream['ts']
+                        logger.info('SVR_THREAD %r' % thread)
+                        my_channel = data_stream['channel']
+                        itsm_dict = get_today_itsm_svr(ticket_no, usr, pwd)
+                        print('ITSM DICT SVR: ', itsm_dict.keys())
+                        if 'result' in itsm_dict.keys():
+                            itsm_info = process_itsm_svr_info(itsm_dict)
+                            logger.info('SVR_ITSM_INFO %r' % itsm_info)
+                            print('SVR_ITSM_INFO %r' % itsm_info)
+                            main_txt = 'SVR'
+                            msg = '''
+                                Date Opened: {0}\nOpened By: {1}\nImpact: {2}
+                                '''.format(itsm_info[ticket_no]['opened_at'], itsm_info[ticket_no]['opened_by'],
+                                           itsm_info[ticket_no]['impact'])
+                            payload_raw = [{"fallback": ticket_no + itsm_info[ticket_no]['short_description'],
+                                            "pretext": ticket_no, \
+                                            "title": itsm_info[ticket_no]['short_description'], "text": msg,
+                                            "color": "#00e600",
+                                            "fields": [{"title": "Assigned To",
+                                                        "value": itsm_info[ticket_no]['assignment_group'],
+                                                        "short": True}, \
+                                                       {"title": "Date Updated",
+                                                        "value": itsm_info[ticket_no]['sys_updated_on'],
+                                                        "short": True}, \
+                                                       {"title": "Comments",
+                                                        "value": itsm_info[ticket_no]['comments'], "short": False}], \
+                                            "footer": "ITSM Slack Integration"}]
+                            send_slack_msg = make_slack_api_call(payload, main_txt, thread, my_channel, payload_raw)
+                            logger.info('send_slack_msg_REPLY %r' % send_slack_msg)
+                            print('send_slack_msg_REPLY %r' % send_slack_msg)
+                        else:
+                            main_txt = ''
+                            msg = '''Could not find ticket Number %s''' % ticket_no
+                            payload_raw = [{"fallback": "No ticket found",
+                                            "pretext": ticket_no, \
+                                            "title": 'no ticket found', "text": msg,
+                                            "color": "#C62828", "fields": [
+                                    {"title": "Comments", "value": 'Got nothing back for ' + ticket_no,
+                                     "short": False}], "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(payload, main_txt, thread, my_channel, payload_raw)
+                            logger.info('slack_api_response %r' % slack_response)
+                            print('slack_api_response %r' % slack_response)
+                    elif 'EVT' in ticket_no:
+                        logger.info('evt_ticket_no %r' % ticket_no)
+                        thread = data_stream['ts']
+                        logger.info('EVT_THREAD %r' % thread)
+                        my_channel = data_stream['channel']
+                        itsm_dict = get_today_itsm_evt(ticket_no, usr, pwd)
+                        logger.info('itsm_dict %r' % itsm_dict)
+                        if 'result' in itsm_dict.keys():
+                            itsm_info = process_itsm_svr_info(itsm_dict)
+                            logger.info('EVT_ITSM_INFO %r' % itsm_info)
+                            main_txt = ''
+                            msg = '''
+                                Date Opened: {0}\nOpened By: {1}\nImpact: {2}
+                                '''.format(itsm_info[ticket_no]['opened_at'], itsm_info[ticket_no]['opened_by'],
+                                           itsm_info[ticket_no]['impact'])
+                            payload_raw = [{"fallback": ticket_no + itsm_info[ticket_no]['short_description'],
+                                            "pretext": ticket_no, \
+                                            "title": itsm_info[ticket_no]['short_description'], "text": msg,
+                                            "color": "#00e600",
+                                            "fields": [{"title": "Assigned To",
+                                                        "value": itsm_info[ticket_no]['assignment_group'],
+                                                        "short": True}, \
+                                                       {"title": "Date Updated",
+                                                        "value": itsm_info[ticket_no]['sys_updated_on'],
+                                                        "short": True}, \
+                                                       {"title": "Comments",
+                                                        "value": itsm_info[ticket_no]['comments'],
+                                                        "short": False}], \
+                                            "footer": "ITSM Slack Integration"}]
+                            send_slack_msg = make_slack_api_call(client, main_txt, thread, my_channel,
+                                                                 payload_raw)
+                            logger.info('send_slack_msg_REPLY %r' % send_slack_msg)
+                        else:
+                            main_txt = ''
+                            msg = '''Could not find ticket Number %s''' % ticket_no
+                            payload_raw = [{"fallback": "No ticket found",
+                                            "pretext": ticket_no, \
+                                            "title": 'no ticket found', "text": msg,
+                                            "color": "#C62828", "fields": [
+                                    {"title": "Comments", "value": 'Got nothing back for ' + ticket_no,
+                                     "short": False}], "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(client, main_txt, thread, my_channel, payload_raw)
+                            logger.info('slack_api_response %r' % slack_response)
+                    elif 'CTASK' in ticket_no:
+                        logger.info('ctask_ticket_no %r' % ticket_no)
+                        thread = data_stream['ts']
+                        logger.info('ctask_THREAD %r' % thread)
+                        my_channel = data_stream['channel']
+                        itsm_dict = get_today_itsm_ctask(ticket_no, usr, pwd)
+                        logger.info('itsm_dict %r' % itsm_dict)
+                        if 'result' in itsm_dict.keys():
+                            itsm_info = process_itsm_svr_info(itsm_dict)
+                            logger.info('ctask_ITSM_INFO %r' % itsm_info)
+                            main_txt = ''
+                            msg = '''
+                                Date Opened: {0}\nOpened By: {1}\nImpact: {2}
+                                '''.format(itsm_info[ticket_no]['opened_at'], itsm_info[ticket_no]['opened_by'],
+                                           itsm_info[ticket_no]['impact'])
+                            payload_raw = [{"fallback": ticket_no + itsm_info[ticket_no]['short_description'],
+                                            "pretext": ticket_no, \
+                                            "title": itsm_info[ticket_no]['short_description'], "text": msg,
+                                            "color": "#00e600",
+                                            "fields": [{"title": "Assigned To",
+                                                        "value": itsm_info[ticket_no]['assignment_group'],
+                                                        "short": True}, \
+                                                       {"title": "Date Updated",
+                                                        "value": itsm_info[ticket_no]['sys_updated_on'],
+                                                        "short": True}, \
+                                                       {"title": "Comments",
+                                                        "value": itsm_info[ticket_no]['comments'],
+                                                        "short": False}], \
+                                            "footer": "ITSM Slack Integration"}]
+                            send_slack_msg = make_slack_api_call(client, main_txt, thread, my_channel,
+                                                                 payload_raw)
+                            logger.info('send_slack_msg_REPLY %r' % send_slack_msg)
+                        else:
+                            main_txt = ''
+                            msg = '''Could not find ticket Number %s''' % ticket_no
+                            payload_raw = [{"fallback": "No ticket found",
+                                            "pretext": ticket_no, \
+                                            "title": 'no ticket found', "text": msg,
+                                            "color": "#C62828", "fields": [
+                                    {"title": "Comments", "value": 'Got nothing back for ' + ticket_no,
+                                     "short": False}], "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(client, main_txt, thread, my_channel, payload_raw)
+                            logger.info('slack_api_response %r' % slack_response)
+                    elif 'CHM' in ticket_no:
+                        logger.info('CHM_ticket_no %r' % ticket_no)
+                        thread = data_stream['ts']
+                        logger.info('CHM_THREAD %r' % thread)
+                        my_channel = data_stream['channel']
+                        itsm_dict = get_today_itsm_chm(ticket_no, usr, pwd)
+                        logger.info('itsm_dict %r' % itsm_dict)
+                        if 'result' in itsm_dict.keys():
+                            itsm_info = process_itsm_svr_info(itsm_dict)
+                            logger.info('ctask_ITSM_INFO %r' % itsm_info)
+                            main_txt = ''
+                            msg = '''
+                                Date Opened: {0}\nOpened By: {1}\nImpact: {2}
+                                '''.format(itsm_info[ticket_no]['opened_at'], itsm_info[ticket_no]['opened_by'],
+                                           itsm_info[ticket_no]['impact'])
+                            payload_raw = [{"fallback": ticket_no + itsm_info[ticket_no]['short_description'],
+                                            "pretext": ticket_no, \
+                                            "title": itsm_info[ticket_no]['short_description'], "text": msg,
+                                            "color": "#00e600",
+                                            "fields": [{"title": "Assigned To",
+                                                        "value": itsm_info[ticket_no]['assignment_group'],
+                                                        "short": True}, \
+                                                       {"title": "Date Updated",
+                                                        "value": itsm_info[ticket_no]['sys_updated_on'],
+                                                        "short": True}, \
+                                                       {"title": "Comments",
+                                                        "value": itsm_info[ticket_no]['comments'],
+                                                        "short": False}], \
+                                            "footer": "ITSM Slack Integration"}]
+                            send_slack_msg = make_slack_api_call(client, main_txt, thread, my_channel,
+                                                                 payload_raw)
+                            logger.info('send_slack_msg_REPLY %r' % send_slack_msg)
+                        else:
+                            main_txt = ''
+                            msg = '''Could not find ticket Number %s''' % ticket_no
+                            payload_raw = [{"fallback": "No ticket found",
+                                            "pretext": ticket_no, \
+                                            "title": 'no ticket found', "text": msg,
+                                            "color": "#C62828", "fields": [
+                                    {"title": "Comments", "value": 'Got nothing back for ' + ticket_no,
+                                     "short": False}], "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(client, main_txt, thread, my_channel, payload_raw)
+                            logger.info('slack_api_response %r' % slack_response)
+                    elif 'STASK' in ticket_no:
+                        logger.info('STASK_ticket_no %r' % ticket_no)
+                        thread = data_stream['ts']
+                        logger.info('STASK_THREAD %r' % thread)
+                        my_channel = data_stream['channel']
+                        itsm_dict = get_today_itsm_stask(ticket_no, usr, pwd)
+                        logger.info('itsm_dict %r' % itsm_dict)
+                        if 'result' in itsm_dict.keys():
+                            itsm_info = process_itsm_svr_info(itsm_dict)
+                            logger.info('STASK_ITSM_INFO %r' % itsm_info)
+                            main_txt = ''
+                            msg = '''
+                                Date Opened: {0}\nOpened By: {1}\nImpact: {2}
+                                '''.format(itsm_info[ticket_no]['opened_at'], itsm_info[ticket_no]['opened_by'],
+                                           itsm_info[ticket_no]['impact'])
+                            payload_raw = [{"fallback": ticket_no + itsm_info[ticket_no]['short_description'],
+                                            "pretext": ticket_no, \
+                                            "title": itsm_info[ticket_no]['short_description'], "text": msg,
+                                            "color": "#00e600",
+                                            "fields": [{"title": "Assigned To",
+                                                        "value": itsm_info[ticket_no]['assignment_group'],
+                                                        "short": True}, \
+                                                       {"title": "Date Updated",
+                                                        "value": itsm_info[ticket_no]['sys_updated_on'],
+                                                        "short": True}, \
+                                                       {"title": "Comments",
+                                                        "value": itsm_info[ticket_no]['comments'],
+                                                        "short": False}], \
+                                            "footer": "ITSM Slack Integration"}]
+                            send_slack_msg = make_slack_api_call(client, main_txt, thread, my_channel,
+                                                                 payload_raw)
+                            logger.info('send_slack_msg_REPLY %r' % send_slack_msg)
+                        else:
+                            main_txt = ''
+                            msg = '''Could not find ticket Number %s''' % ticket_no
+                            payload_raw = [{"fallback": "No ticket found",
+                                            "pretext": ticket_no, \
+                                            "title": 'no ticket found', "text": msg,
+                                            "color": "#C62828", "fields": [
+                                    {"title": "Comments", "value": 'Got nothing back for ' + ticket_no,
+                                     "short": False}], "footer": "ITSM Slack Integration"}]
+                            slack_response = make_slack_api_call(client, main_txt, thread, my_channel, payload_raw)
+                            logger.info('slack_api_response %r' % slack_response)
+    except Exception as e:
+        logger.info('ERROR: %r' % e)
+        print(e)
+
+
+# instantiate logger
+logger = setup_custom_logger('itsm_slack_integration')
+
+# INSTANTIATE THE SLACK CLIENT
+SLACK_TOKEN = ConfigSectionMap('slackbot')['slack_tocken'].strip("'")
+client = slack.RTMClient(token=SLACK_TOKEN, connect_method='rtm.connect')
+
+client.start()
